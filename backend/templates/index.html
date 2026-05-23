@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudNotes</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f0f4f8; }
+    .navbar-brand { font-weight: 700; font-size: 1.4rem; }
+    .note-card { transition: box-shadow .2s; border: none; border-radius: 12px; }
+    .note-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+    .note-title { font-size: 1rem; font-weight: 600; }
+    .sidebar-card { border-radius: 12px; border: none; }
+    #statusMsg { font-size: .875rem; }
+    #readmeBody h1,#readmeBody h2,#readmeBody h3 { margin-top: 1.2rem; }
+    #readmeBody table { width:100%; border-collapse:collapse; margin:.75rem 0; }
+    #readmeBody th,#readmeBody td { border:1px solid #dee2e6; padding:.4rem .65rem; }
+    #readmeBody th { background:#f8f9fa; }
+    #readmeBody pre { background:#f8f9fa; padding:.75rem; border-radius:6px; overflow-x:auto; }
+    #readmeBody code { background:#f0f0f0; padding:.1rem .3rem; border-radius:3px; font-size:.875em; }
+    #readmeBody pre code { background:none; padding:0; }
+    #readmeBody blockquote { border-left:4px solid #dee2e6; padding-left:1rem; color:#6c757d; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark bg-primary shadow-sm mb-4">
+    <div class="container">
+      <span class="navbar-brand">&#128221; CloudNotes</span>
+      <div class="d-flex align-items-center gap-3">
+        <span class="text-white-50 small" id="noteCount"></span>
+        <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#readmeModal">README</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- README modal -->
+  <div class="modal fade" id="readmeModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">README — CloudNotes</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="readmeBody">
+          <div class="text-center text-muted py-4">Loading…</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container pb-5">
+    <div class="row g-4">
+
+      <!-- Add note form -->
+      <div class="col-lg-4">
+        <div class="card sidebar-card shadow-sm">
+          <div class="card-header bg-primary text-white fw-semibold">New Note</div>
+          <div class="card-body">
+            <form id="noteForm">
+              <div class="mb-3">
+                <label class="form-label fw-medium">Title</label>
+                <input type="text" id="title" class="form-control" maxlength="200" required placeholder="Note title…">
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-medium">Content</label>
+                <textarea id="content" class="form-control" rows="6" required placeholder="Write your note here…"></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary w-100" id="submitBtn">Save Note</button>
+              <div id="statusMsg" class="mt-2 text-center"></div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes list -->
+      <div class="col-lg-8">
+        <h5 class="fw-semibold mb-3 text-secondary">My Notes</h5>
+        <div id="notesList">
+          <div class="text-center py-5 text-muted">Loading…</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script>
+    const API = '/api/notes';
+
+    function esc(t) {
+      return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function loadNotes() {
+      try {
+        const res = await fetch(API);
+        const notes = await res.json();
+        document.getElementById('noteCount').textContent =
+          notes.length === 1 ? '1 note' : `${notes.length} notes`;
+
+        const list = document.getElementById('notesList');
+        if (!notes.length) {
+          list.innerHTML = '<p class="text-muted text-center py-4">No notes yet — create your first one!</p>';
+          return;
+        }
+        list.innerHTML = notes.map(n => `
+          <div class="card note-card shadow-sm mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+              <span class="note-title">${esc(n.title)}</span>
+              <button class="btn btn-sm btn-outline-danger"
+                      onclick="deleteNote(${n.id}, this)">Delete</button>
+            </div>
+            <div class="card-body py-2">
+              <p class="card-text mb-1" style="white-space:pre-wrap">${esc(n.content)}</p>
+              <small class="text-muted">${new Date(n.created_at).toLocaleString()}</small>
+            </div>
+          </div>`).join('');
+      } catch (e) {
+        document.getElementById('notesList').innerHTML =
+          '<div class="alert alert-danger">Could not load notes. Please try again.</div>';
+      }
+    }
+
+    async function deleteNote(id, btn) {
+      if (!confirm('Delete this note?')) return;
+      btn.disabled = true;
+      try {
+        await fetch(`${API}/${id}`, { method: 'DELETE' });
+        loadNotes();
+      } catch {
+        btn.disabled = false;
+        alert('Delete failed. Please try again.');
+      }
+    }
+
+    document.getElementById('noteForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      const status = document.getElementById('statusMsg');
+      btn.disabled = true;
+      status.textContent = '';
+
+      try {
+        const res = await fetch(API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: document.getElementById('title').value,
+            content: document.getElementById('content').value
+          })
+        });
+        if (!res.ok) throw new Error(await res.text());
+
+        document.getElementById('title').value = '';
+        document.getElementById('content').value = '';
+        status.innerHTML = '<span class="text-success">Note saved!</span>';
+        loadNotes();
+      } catch {
+        status.innerHTML = '<span class="text-danger">Save failed. Please try again.</span>';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    loadNotes();
+
+    let readmeLoaded = false;
+    document.getElementById('readmeModal').addEventListener('show.bs.modal', async () => {
+      if (readmeLoaded) return;
+      try {
+        const res = await fetch('/api/readme');
+        const text = await res.text();
+        document.getElementById('readmeBody').innerHTML = marked.parse(text);
+        readmeLoaded = true;
+      } catch {
+        document.getElementById('readmeBody').innerHTML =
+          '<div class="alert alert-danger">Could not load README.</div>';
+      }
+    });
+  </script>
+</body>
+</html>

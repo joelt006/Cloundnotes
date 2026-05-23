@@ -1,0 +1,46 @@
+# docker-compose.yml — LOCAL DEVELOPMENT ONLY
+# Cloud deployment uses Azure Container Instances (ACI) via prepare-app.sh
+# This file is for running the app locally without HTTPS.
+#
+# Usage:
+#   cp .env.example .env   # fill in POSTGRES_* and SECRET_KEY
+#   docker compose up --build
+#   Open http://localhost:5000
+
+version: '3.8'
+
+services:
+  # Container 1: Flask backend - serves the web app and REST API
+  backend:
+    build: ./backend
+    container_name: cloudnotes_backend
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+      SECRET_KEY: "${SECRET_KEY:-dev-secret-key}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Container 2: PostgreSQL - persistent database
+  db:
+    image: postgres:15-alpine
+    container_name: cloudnotes_db
+    restart: always
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-cloudnotes}"
+      POSTGRES_USER: "${POSTGRES_USER:-cloudnotes_user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cloudnotes_user} -d ${POSTGRES_DB:-cloudnotes}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
