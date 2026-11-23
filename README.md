@@ -1,4 +1,4 @@
-# CloudNotes — Cloud Exam Application (sk1)
+# CloudNotes 
 
 A note-taking web application deployed on **Microsoft Azure** using Azure Container Instances (ACI), with automatic HTTPS via Let's Encrypt and Caddy.
 
